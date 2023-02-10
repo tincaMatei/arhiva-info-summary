@@ -1,6 +1,31 @@
 use std::path::{Path, PathBuf};
 use std::env;
 use std::fs;
+use clap::Parser;
+
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Write the markdown into the file.
+    #[arg(short, long)]
+    write: bool,
+
+    /// Target folder to summarize.
+    #[arg()]
+    folder: String,
+
+    /// Display a big table with all the problems.
+    #[arg(short, long)]
+    table: bool,
+
+    /// Overwrite already existing content.
+    #[arg(short, long)]
+    overwrite: bool,
+
+    /// Make a README for every directory that contains a problem.
+    #[arg(short, long)]
+    recursive: bool,
+}
 
 #[derive(Debug)]
 enum Tree {
@@ -88,7 +113,7 @@ fn get_verdict(path: &Path) -> &str {
     }
 }
 
-fn markdown_from_problems(files: &Vec<PathBuf>, prefix: &str) -> String {
+fn markdown_from_problems(files: &Vec<PathBuf>, prefix: &Path) -> String {
     let mut result = String::new();
 
     result.push_str("| Nume | Enunt | Teste | Editorial | Surse |\n");
@@ -98,7 +123,7 @@ fn markdown_from_problems(files: &Vec<PathBuf>, prefix: &str) -> String {
         let line = e.to_str().unwrap();
 
         result = result + format!("| {} | {} | {} | {} | {} |\n", 
-            line.strip_prefix(prefix).unwrap(),
+            line.strip_prefix(prefix.to_str().unwrap()).unwrap(),
             get_verdict(&e.join("enunt")),
             get_verdict(&e.join("teste")),
             get_verdict(&e.join("editorial")),
@@ -117,7 +142,7 @@ fn markdown_from_tree(tree: &Vec<Tree>, prefix: &Path) -> String {
     for e in tree {
         match e {
             Tree::Node(path) => {
-                if (started_table) {
+                if started_table {
                     result.push('\n');
                     started_table = false;
                 }
@@ -160,19 +185,101 @@ fn markdown_from_tree(tree: &Vec<Tree>, prefix: &Path) -> String {
     result
 }
 
-fn main() {
-    let mut args = env::args();
-    args.next();
+fn write_into_file(path: &Path, content: &str) {
+    fs::write(path, content)
+        .unwrap();
+}
 
-    for argument in args {
-        let mut tree: Vec<Tree> = Vec::new();
+fn make_markdown_table(path: &Path) -> String {
+    let mut problems: Vec<PathBuf> = Vec::new();
 
-        let path = Path::new(&argument)
-            .canonicalize()
-            .unwrap();
+    collect_problems(&path, &mut problems);
 
-        build_tree(&path, &mut tree);
+    markdown_from_problems(&problems, &path)
+}
 
-        println!("{}", markdown_from_tree(&tree, &path));
+fn make_markdown_readme(path: &Path) -> String {
+    let mut tree: Vec<Tree> = Vec::new();
+
+    build_tree(&path, &mut tree);
+
+    markdown_from_tree(&tree, &path)
+}
+
+fn replace_summary(path: &Path, new_content: &str) -> String {
+    let mut result = String::new();
+
+    result = fs::read_to_string(path)
+        .unwrap();
+
+    result = match result.find("# Generated Summary") {
+        Some(pos) => {
+            result[..pos].to_string()
+        },
+        None => {
+            result
+        }
+    };
+
+    result = result + "# Generated Summary\n\n" + new_content;
+
+    result
+}
+
+fn create_readme_recursive(path: &Path, args: &Args) {
+    let mut tree: Vec<Tree> = Vec::new();
+
+    build_tree(&path, &mut tree);
+
+    let dirs: Vec<&PathBuf> = tree.iter()
+        .filter(|node| {
+            match node {
+                Tree::Node(path) => true,
+                Tree::Leaf(path) => false,
+            }
+        })
+        .map(|node| {
+            match node {
+                Tree::Node(path) => path,
+                Tree::Leaf(path) => path,
+            }
+        })
+        .collect();
+
+    for dir in dirs {
+        create_readme(dir, args);    
     }
 }
+
+fn create_readme(path: &Path, args: &Args) {
+    let mut markdown = if (args.table) {
+        make_markdown_table(&path)
+    } else {
+        make_markdown_readme(&path)
+    };
+
+    if !args.overwrite {
+        markdown = replace_summary(&path.join("README.md"), &markdown);
+    }
+
+    if args.write {
+        write_into_file(&path.join("README.md"), &markdown);
+    } else {
+        println!("{}", markdown);
+    }
+}
+
+fn main() {
+    let args = Args::parse();
+    
+    let path = Path::new(&args.folder)
+        .canonicalize()
+        .unwrap();
+    
+    if args.recursive {
+        create_readme_recursive(&path, &args);
+    } else {
+        create_readme(&path, &args);
+    }
+}
+
