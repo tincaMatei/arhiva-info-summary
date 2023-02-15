@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::env;
 use std::fs;
 use clap::Parser;
 
@@ -36,9 +35,22 @@ enum Tree {
 fn is_problem(path: &Path) -> bool {
     let requirements = vec!["editorial", "teste", "surse", "enunt"];
 
-    requirements.into_iter().all(|name| {
-        path.join(name).is_dir()
-    })
+    requirements
+        .into_iter()
+        .all(|name| {
+            path.join(name).is_dir()
+        })
+}
+
+fn get_dir_entries(path: &Path) -> Result<Vec<PathBuf>, ()> {
+    let res = path.read_dir()
+        .map_err(|_| ())?
+        .filter_map(|res| { res.ok() } )
+        .map(|res| { res.path() })
+        .filter(|res| { res.is_dir() } )
+        .collect();
+    
+    Ok(res)
 }
 
 fn collect_problems(path: &Path, result: &mut Vec<PathBuf>) {
@@ -47,18 +59,13 @@ fn collect_problems(path: &Path, result: &mut Vec<PathBuf>) {
         return;
     }
 
-    let mut entries: Vec<PathBuf> = path.read_dir()
-        .unwrap()
-        .map(|res| { res.unwrap().path() })
-        .filter(|res| { res.is_dir() } )
-        .collect();
+    let mut entries: Vec<PathBuf> = get_dir_entries(path)
+        .unwrap_or_default();
 
     entries.sort();
 
     for e in entries {
-        if e.is_dir() {
-            collect_problems(&e, result);
-        }
+        collect_problems(&e, result);
     }
 }
 
@@ -72,16 +79,13 @@ fn build_tree(path: &Path, result: &mut Vec<Tree>) -> bool {
 
     result.push(Tree::Node(path.to_path_buf()));
 
-    let mut entries: Vec<PathBuf> = path.read_dir()
-        .unwrap()
-        .map(|res| { res.unwrap().path() })
-        .filter(|res| { res.is_dir() })
-        .collect();
-    
+    let mut entries = get_dir_entries(path)
+        .unwrap_or_default();
+
     entries.sort();
 
     for e in entries {
-        if e.is_dir() && build_tree(&e, result) {
+        if build_tree(&e, result) {
             important = true;
         }
     }
@@ -94,9 +98,11 @@ fn build_tree(path: &Path, result: &mut Vec<Tree>) -> bool {
 }
 
 fn is_dir_empty(path: &Path) -> bool {
-    path.read_dir()
-        .unwrap()
-        .count() == 0
+    let dir_count = path.read_dir()
+        .ok()
+        .map_or(0, |dir| { dir.count() });
+
+    dir_count == 0
 }
 
 fn is_dir_broken(path: &Path) -> bool {
@@ -119,11 +125,16 @@ fn markdown_from_problems(files: &Vec<PathBuf>, prefix: &Path) -> String {
     result.push_str("| Nume | Enunt | Teste | Editorial | Surse |\n");
     result.push_str("| ---- | ----- | ----- | --------- | ----- |\n");
 
+    let prefix_str = prefix.to_str()
+        .unwrap_or("");
+
     for e in files {
-        let line = e.to_str().unwrap();
+        let line = e.to_str()
+            .unwrap_or("");
 
         result = result + format!("| {} | {} | {} | {} | {} |\n", 
-            line.strip_prefix(prefix.to_str().unwrap()).unwrap(),
+            line.strip_prefix(prefix_str)
+                .unwrap_or(""),
             get_verdict(&e.join("enunt")),
             get_verdict(&e.join("teste")),
             get_verdict(&e.join("editorial")),
@@ -133,11 +144,15 @@ fn markdown_from_problems(files: &Vec<PathBuf>, prefix: &Path) -> String {
     result
 }
 
+fn get_dirname_from_path(path: &Path) -> &str {
+    path.file_name()
+        .map(|os_str| { os_str.to_str().unwrap_or("") } )
+        .unwrap_or("")
+}
+
 fn markdown_from_tree(tree: &Vec<Tree>, prefix: &Path) -> String {
     let mut result = String::new();
     let mut started_table = false;
-
-    let requirements = vec!["enunt", "teste", "editorial", "surse"];
 
     for e in tree {
         match e {
@@ -147,15 +162,18 @@ fn markdown_from_tree(tree: &Vec<Tree>, prefix: &Path) -> String {
                     started_table = false;
                 }
 
-                let relative_dirname = path
-                    .strip_prefix(prefix.parent().unwrap()).unwrap();
-                let count = relative_dirname.components().count();
+                let parent_prefix = prefix.parent()
+                    .map_or(PathBuf::new(), |res| { res.to_path_buf() } );
 
-                let dirname = path
-                    .file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap();
+                let relative_dirname = path
+                    .strip_prefix(parent_prefix)
+                    .map_or(PathBuf::new(), |res| { res.to_path_buf() } );
+                
+                let count = relative_dirname
+                    .components()
+                    .count();
+
+                let dirname = get_dirname_from_path(path);
 
                 result = result + &"#".to_string().repeat(count) + &format!(" {}\n\n", dirname);
             },
@@ -166,11 +184,7 @@ fn markdown_from_tree(tree: &Vec<Tree>, prefix: &Path) -> String {
                     result.push_str("| ---- | ----- | ----- | --------- | ----- |\n");
                 }
             
-                let dirname = path.
-                    file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap();
+                let dirname = get_dirname_from_path(path);
 
                 result = result + format!("| {} | {} | {} | {} | {} |\n",
                     dirname,
@@ -187,7 +201,7 @@ fn markdown_from_tree(tree: &Vec<Tree>, prefix: &Path) -> String {
 
 fn write_into_file(path: &Path, content: &str) {
     fs::write(path, content)
-        .unwrap();
+        .unwrap_or(())
 }
 
 fn make_markdown_table(path: &Path) -> String {
@@ -207,10 +221,10 @@ fn make_markdown_readme(path: &Path) -> String {
 }
 
 fn replace_summary(path: &Path, new_content: &str) -> String {
-    let mut result = String::new();
-
-    result = fs::read_to_string(path)
-        .unwrap();
+    let mut result = match fs::read_to_string(path) {
+        Ok(res) => res,
+        Err(_) => String::new(),
+    };
 
     result = match result.find("# Generated Summary") {
         Some(pos) => {
@@ -234,8 +248,8 @@ fn create_readme_recursive(path: &Path, args: &Args) {
     let dirs: Vec<&PathBuf> = tree.iter()
         .filter(|node| {
             match node {
-                Tree::Node(path) => true,
-                Tree::Leaf(path) => false,
+                Tree::Node(_) => true,
+                Tree::Leaf(_) => false,
             }
         })
         .map(|node| {
@@ -252,7 +266,7 @@ fn create_readme_recursive(path: &Path, args: &Args) {
 }
 
 fn create_readme(path: &Path, args: &Args) {
-    let mut markdown = if (args.table) {
+    let mut markdown = if args.table {
         make_markdown_table(&path)
     } else {
         make_markdown_readme(&path)
@@ -273,8 +287,15 @@ fn main() {
     let args = Args::parse();
     
     let path = Path::new(&args.folder)
-        .canonicalize()
-        .unwrap();
+        .canonicalize();
+
+    let path = match path {
+        Ok(path) => path,
+        Err(e) => {
+            println!("Error: {}", e);
+            return;
+        }
+    };
     
     if args.recursive {
         create_readme_recursive(&path, &args);
