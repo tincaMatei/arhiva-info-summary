@@ -102,7 +102,10 @@ fn is_dir_empty(path: &Path) -> bool {
         .ok()
         .map_or(0, |dir| { dir.count() });
 
-    dir_count == 0
+    let contains_missing = path.join("missing.md")
+        .is_file();
+
+    dir_count == 0 || contains_missing
 }
 
 fn is_dir_broken(path: &Path) -> bool {
