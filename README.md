@@ -18,12 +18,15 @@ Fiecare problema va avea urmatoarele patru directoare:
 * problema/editorial
 * problema/surse
 
+Adițional, o problemă poate avea și fișierul `mirrors.json`, în care sunt specificate linkuri pe
+platforme.
+
 Tabelul va arata astfel:
 
-| Nume | Enunt | Teste | Editorial | Surse |
-| ---- | ----- | ----- | --------- | ----- |
-| problema-1 | Ok | Incomplet | Gol | Gol |
-| problema-2 | Gol | Gol | Gol | Gol |
+| Nume | Enunt | Teste | Editorial | Surse | Mirrors |
+| ---- | ----- | ----- | --------- | ----- | |
+| problema-1 | Ok | Incomplet | Gol | Gol | |
+| problema-2 | Gol | Gol | Gol | Gol | [Infoarena](https://infoarena.ro/) |
 
 Ok inseamna ca exista fisiere in acel director, deci exista lucruri.
 
@@ -33,7 +36,7 @@ descriere cu ce mai trebuie.
 
 Gol inseamna ca directorul problemei este gol.
 
-Un aspect important este ca un utilizator poate sa isi scrie README-urile lui, iar scriptul
+Un aspect important este că un utilizator poate să isi scrie README-urile lui, iar scriptul
 doar va adauga la sfarsit rezumatul, sau il va inlocui daca exista. Important e sa nu existe
 in README un "# Generated Summary" deja facut de utilizator, altfel partea de mai jos o sa fie
 inlocuita toata. Un alt lucru important, mare grija sa nu schimbe cineva partea din "# Generated Summary",
