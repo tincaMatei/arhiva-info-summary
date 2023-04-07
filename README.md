@@ -34,7 +34,7 @@ Incomplet inseamna ca exista in directorul problemei un fisier "broken.md"
 care il marcheaza ca si incomplet, iar in fisierul acela ar trebui sa fie o
 descriere cu ce mai trebuie.
 
-Gol inseamna ca directorul problemei este gol.
+Gol inseamna ca directorul problemei este gol, sau conține un fișier "missing.md" în care se află informații despre de ce este directorul gol.
 
 Un aspect important este că un utilizator poate să isi scrie README-urile lui, iar scriptul
 doar va adauga la sfarsit rezumatul, sau il va inlocui daca exista. Important e sa nu existe
