@@ -24,7 +24,7 @@ platforme.
 Tabelul va arata astfel:
 
 | Nume | Enunt | Teste | Editorial | Surse | Mirrors |
-| ---- | ----- | ----- | --------- | ----- | |
+| ---- | ----- | ----- | --------- | ----- | ------- |
 | problema-1 | Ok | Incomplet | Gol | Gol | |
 | problema-2 | Gol | Gol | Gol | Gol | [Infoarena](https://infoarena.ro/) |
 
