@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::fs;
 use clap::Parser;
+use serde_json::{Map};
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -122,11 +123,45 @@ fn get_verdict(path: &Path) -> &str {
     }
 }
 
+fn get_mirror_links(path: &Path) -> Result<Vec<(String, String)>, String> {
+    let mirror_path = path.join("mirrors.json");
+
+    let contents = fs::read_to_string(mirror_path)
+        .map_err(|x| { x.to_string() })?;
+
+    let mirrors: Map<String, serde_json::Value> = serde_json::from_str(&contents)
+        .map_err(|x| { x.to_string() })?;
+
+    let mut res: Vec<(String, String)> = Vec::new();
+
+    for (k, v) in mirrors {
+        println!("{} {:?}", k, v);
+        
+        if let serde_json::Value::String(val) = v {
+            res.push((k, val));
+        }
+    }
+
+    Ok(res)
+}
+
+fn markdown_link(text: String, url: String) -> String {
+    format!("[{}]({})", text, url).to_string()
+}
+
+fn mirrors_to_markdown(mirrors: Vec<(String, String)>) -> String {
+    mirrors
+        .into_iter()
+        .map(|(mirror, link)| { markdown_link(mirror, link) })
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
 fn markdown_from_problems(files: &Vec<PathBuf>, prefix: &Path) -> String {
     let mut result = String::new();
 
-    result.push_str("| Nume | Enunt | Teste | Editorial | Surse |\n");
-    result.push_str("| ---- | ----- | ----- | --------- | ----- |\n");
+    result.push_str("| Nume | Enunt | Teste | Editorial | Surse | Mirrors |\n");
+    result.push_str("| ---- | ----- | ----- | --------- | ----- | ------- |\n");
 
     let prefix_str = prefix.to_str()
         .unwrap_or("");
@@ -135,13 +170,20 @@ fn markdown_from_problems(files: &Vec<PathBuf>, prefix: &Path) -> String {
         let line = e.to_str()
             .unwrap_or("");
 
-        result = result + format!("| {} | {} | {} | {} | {} |\n", 
-            line.strip_prefix(prefix_str)
-                .unwrap_or(""),
+        let problem_name = line.strip_prefix(prefix_str)
+            .unwrap_or("");
+
+        let mirrors = get_mirror_links(e)
+            .map(|val| { mirrors_to_markdown(val) })
+            .unwrap_or("".to_string());
+
+        result = result + format!("| {} | {} | {} | {} | {} | {} |\n", 
+            problem_name,
             get_verdict(&e.join("enunt")),
             get_verdict(&e.join("teste")),
             get_verdict(&e.join("editorial")),
-            get_verdict(&e.join("surse"))).as_str();
+            get_verdict(&e.join("surse")),
+            mirrors).as_str();
     }
 
     result
@@ -183,18 +225,23 @@ fn markdown_from_tree(tree: &Vec<Tree>, prefix: &Path) -> String {
             Tree::Leaf(path) => {
                 if !started_table {
                     started_table = true;
-                    result.push_str("| Nume | Enunt | Teste | Editorial | Surse |\n");
-                    result.push_str("| ---- | ----- | ----- | --------- | ----- |\n");
+                    result.push_str("| Nume | Enunt | Teste | Editorial | Surse | Mirrors |\n");
+                    result.push_str("| ---- | ----- | ----- | --------- | ----- | ------- |\n");
                 }
             
                 let dirname = get_dirname_from_path(path);
 
-                result = result + format!("| {} | {} | {} | {} | {} |\n",
+                let mirrors = get_mirror_links(path)
+                    .map(|val| { mirrors_to_markdown(val) })
+                    .unwrap_or("".to_string());
+
+                result = result + format!("| {} | {} | {} | {} | {} | {} |\n",
                     dirname,
                     get_verdict(&path.join("enunt")),
                     get_verdict(&path.join("teste")),
                     get_verdict(&path.join("editorial")),
-                    get_verdict(&path.join("surse"))).as_str();
+                    get_verdict(&path.join("surse")),
+                    mirrors).as_str();
             },
         }
     }
